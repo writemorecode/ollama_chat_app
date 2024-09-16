@@ -7,32 +7,45 @@ function addMessage(sender, message) {
     messageElement.innerHTML = `<strong>${sender}:</strong> ${message}`;
     chatContainer.appendChild(messageElement);
     chatContainer.scrollTop = chatContainer.scrollHeight;
+    return messageElement;
 }
 
 async function sendMessage() {
     const message = userInput.value.trim();
+    const message_b64 = btoa(message);
     if (message) {
         addMessage('You', message);
         userInput.value = '';
 
-        try {
-            const response = await fetch('/send_message', {
+        const llmMessageElement = addMessage('LLM', '');
+        let fullResponse = '';
+
+        const eventSource = new EventSource(`/stream/` + message_b64);
+
+        eventSource.onmessage = function(event) {
+            console.log(event.data);
+            fullResponse += event.data;
+            llmMessageElement.innerHTML = `<strong>LLM:</strong> ${fullResponse}`;
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        };
+
+        eventSource.onerror = function(error) {
+            console.log(error);
+            eventSource.close();
+            if (fullResponse === '') {
+                llmMessageElement.innerHTML = '<strong>LLM:</strong> Error: Failed to get response from the server';
+            }
+        };
+
+        eventSource.onopen = function() {
+            fetch('/stream', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                 },
                 body: JSON.stringify({ message: message }),
             });
-
-            if (response.ok) {
-                const data = await response.json();
-                addMessage('LLM', data.response);
-            } else {
-                addMessage('Error', 'Failed to get response from the server');
-            }
-        } catch (error) {
-            addMessage('Error', 'An error occurred while sending the message');
-        }
+        };
     }
 }
 
