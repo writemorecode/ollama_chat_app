@@ -6,8 +6,21 @@ from flask import (
 )
 import ollama
 import base64
+import logging
 
 app = Flask(__name__)
+
+MODEL = "gemma2:2b"
+
+client = ollama.Client(host="http://ollama:11434")
+
+logging.basicConfig(
+    level=logging.DEBUG,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    handlers=[
+        logging.StreamHandler()  # Output logs to console
+    ],
+)
 
 
 @app.route("/")
@@ -20,8 +33,8 @@ def stream(prompt_b64: str):
     prompt = base64.b64decode(prompt_b64).decode()
 
     def generate():
-        stream = ollama.chat(
-            model="gemma2:2b",
+        stream = client.chat(
+            model=MODEL,
             messages=[
                 {
                     "role": "user",
@@ -37,4 +50,4 @@ def stream(prompt_b64: str):
 
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    app.run(host='0.0.0.0', port=5000 , debug=True)
