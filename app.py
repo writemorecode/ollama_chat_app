@@ -23,7 +23,7 @@ def index() -> str:
 def stream(prompt_b64: str) -> Response:
     prompt = base64.b64decode(prompt_b64).decode()
 
-    def generate() -> Generator[str]:
+    def generate():
         stream = client.chat(
             model=MODEL,
             stream=True,
