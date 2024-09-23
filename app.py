@@ -1,5 +1,4 @@
 import base64
-from typing import Generator
 
 import ollama
 from flask import (
