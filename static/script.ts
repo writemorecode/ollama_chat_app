@@ -10,9 +10,9 @@ function addMessage(sender: string, message: string): HTMLParagraphElement {
     return messageElement;
 }
 
-async function getStreamID(message: string): Promise<number | null> {
+async function getStreamID(message: string): Promise<string | null> {
     try {
-        const res = await fetch("/prompt", {
+        const res = await fetch("/stream", {
             'method': 'POST',
             'headers': {
                 'Content-Type': 'application/json'
@@ -33,30 +33,32 @@ async function getStreamID(message: string): Promise<number | null> {
 }
 
 async function sendMessage(message: string) {
-    const res = await getStreamID(message);
-    if (!res) {
+    const response = await getStreamID(message);
+    if (!response) {
         console.error(`Failed to recieve prompt ID for message '${message}'.`);
+        return
     }
-    const promptID = res as number;
+    const promptID: string = response;
 
-    const eventSource = new EventSource(`/stream/${promptID}`);
+    const eventSource = new EventSource(`/chat/${promptID}`);
     const llmMessageElement = addMessage('LLM', '');
     let fullResponse = '';
 
-    eventSource.onopen = function () { };
+    eventSource.onopen = function() { };
 
-    eventSource.onmessage = function (event) {
+    eventSource.onmessage = function(event) {
         fullResponse += event.data;
         llmMessageElement.innerHTML = `<strong>LLM:</strong> ${fullResponse}`;
         chatContainer.scrollTop = chatContainer.scrollHeight;
     };
 
-    eventSource.onerror = function (error) {
+    eventSource.onerror = function(error: Event) {
         console.error(error);
         eventSource.close();
         if (fullResponse === '') {
             llmMessageElement.innerHTML = '<strong>LLM:</strong> Error: Failed to get response from the server';
         }
+
     };
 
 }
@@ -64,9 +66,8 @@ async function sendMessage(message: string) {
 function sendHandler() {
     const message: string = userInput.value.trim();
     if (message.length != 0) {
-        console.log("Sending message: " + message);
-        addMessage('You', message);
         userInput.value = '';
+        addMessage('You', message);
         sendMessage(message);
     }
 }

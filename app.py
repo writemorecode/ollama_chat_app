@@ -1,4 +1,3 @@
-import base64
 import ollama
 from flask import (
     Flask,
@@ -10,14 +9,14 @@ from flask import (
     jsonify,
 )
 
-import random
+import uuid
 
 app: Flask = Flask(__name__)
 MODEL: str = "gemma2:2b"
-# client = ollama.Client(host="http://ollama:11434")
-client = ollama.Client(host="http://localhost:11434")
+client = ollama.Client(host="http://ollama:11434")
+#client = ollama.Client(host="http://localhost:11434")
 
-prompts: dict[int, str] = {}
+prompts: dict[str, str] = {}
 
 
 def generate(prompt: str):
@@ -41,21 +40,21 @@ def index() -> str:
     return render_template("index.html")
 
 
-@app.post("/prompt")
+@app.post("/stream")
 def prompt():
     try:
         prompt: str = request.json["message"]
     except KeyError:
         abort(400)
-    id: int = random.randrange(0, 1_000_000)
-    prompts[id] = prompt
-    return jsonify({"id": id})
+    stream_id: str = str(uuid.uuid4())
+    prompts[stream_id] = prompt
+    return jsonify({"id": stream_id})
 
 
-@app.get("/stream/<int:id>")
-def stream(id: int) -> Response:
+@app.get("/chat/<string:stream_id>")
+def chat(stream_id: str) -> Response:
     try:
-        prompt: str = prompts[id]
+        prompt: str = prompts[stream_id]
     except KeyError:
         abort(404)
 
@@ -65,24 +64,7 @@ def stream(id: int) -> Response:
 
 
 def main():
-    # print("---- RUNNING MAIN FUNCTION ----")
-    # print(f"Pulling {MODEL=}...")
-    try:
-        client.pull(model=MODEL)
-    except Exception as exc:
-        print(exc)
-        return
-    # print(f"Finished pulling {MODEL=}.")
-
-    # print(f"Loading {MODEL=} into memory...")
-    try:
-        client.generate(model=MODEL)
-    except Exception as exc:
-        print(exc)
-        return
-    # print(f"Finished loading {MODEL=} into memory.")
-
-    app.run(host="localhost", port=5000, debug=True)
+    app.run(host="0.0.0.0", port=50000, debug=True)
 
 
 if __name__ == "__main__":
