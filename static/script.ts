@@ -1,3 +1,50 @@
+async function* sseStreamIterator(apiUrl: string, requestBody: {}, extraHeaders: {}) {
+    const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: { ...{ 'Content-Type': 'application/json' }, ...(extraHeaders || {}) },
+        body: JSON.stringify(requestBody),
+    });
+
+    if (!response.ok) {
+        const text = await response.text();
+        throw new Error(`HTTP error: Status ${response.status} Text '${text}'`);
+    }
+
+    if (!response.body) { throw new Error("No body in response"); }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    const prefix = 'data: ';
+
+    while (true) {
+        const { done, value } = await reader.read();
+        if (done) { break; }
+        const buffer = decoder.decode(value, { stream: true })
+        const jsonString = buffer.slice(prefix.length);
+        const json = JSON.parse(jsonString);
+        const messageChunk: string = json['message']['content']
+        if (json['done']) { break; }
+        yield messageChunk;
+    }
+}
+
+async function sendMessage(message: string) {
+    const llmMessageElement = addMessage('LLM', '');
+    let fullResponse = '';
+
+    const apiUrl = 'http://localhost:50000/chat';
+    const requestBody = {
+        'message': message
+    };
+    const extraHeaders = {};
+    for await (const event of sseStreamIterator(apiUrl, requestBody, extraHeaders)) {
+        fullResponse += event
+        llmMessageElement.innerHTML = `<strong>LLM:</strong> ${fullResponse}`;
+        chatContainer.scrollTop = chatContainer.scrollHeight;
+    }
+
+}
+
 const chatContainer = document.getElementById('chat-container') as HTMLElement;
 const userInput = document.getElementById('user-input') as HTMLInputElement;
 const sendButton = document.getElementById('send-button') as HTMLButtonElement;
@@ -10,60 +57,7 @@ function addMessage(sender: string, message: string): HTMLParagraphElement {
     return messageElement;
 }
 
-async function getStreamID(message: string): Promise<string | null> {
-    try {
-        const res = await fetch("/stream", {
-            'method': 'POST',
-            'headers': {
-                'Content-Type': 'application/json'
-            },
-            'body': JSON.stringify({
-                'message': message
-            })
-        });
-        if (!res.ok) {
-            throw new Error("Request failed with status ${res.status}");
-        }
-        const json = await res.json();
-        return json.id;
-    } catch (error) {
-        console.error(error);
-        return null;
-    }
-}
-
-async function sendMessage(message: string) {
-    const response = await getStreamID(message);
-    if (!response) {
-        console.error(`Failed to recieve prompt ID for message '${message}'.`);
-        return
-    }
-    const promptID: string = response;
-
-    const eventSource = new EventSource(`/chat/${promptID}`);
-    const llmMessageElement = addMessage('LLM', '');
-    let fullResponse = '';
-
-    eventSource.onopen = function() { };
-
-    eventSource.onmessage = function(event) {
-        fullResponse += event.data;
-        llmMessageElement.innerHTML = `<strong>LLM:</strong> ${fullResponse}`;
-        chatContainer.scrollTop = chatContainer.scrollHeight;
-    };
-
-    eventSource.onerror = function(error: Event) {
-        console.error(error);
-        eventSource.close();
-        if (fullResponse === '') {
-            llmMessageElement.innerHTML = '<strong>LLM:</strong> Error: Failed to get response from the server';
-        }
-
-    };
-
-}
-
-function sendHandler() {
+async function sendHandler() {
     const message: string = userInput.value.trim();
     if (message.length != 0) {
         userInput.value = '';
